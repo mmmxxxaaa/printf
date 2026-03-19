@@ -181,13 +181,17 @@ processHex: push rdi
             jmp return_here_after_jmp_table
 
 processString:                ;//TODO
+            push rdi
+            mov rdi, [rbp]
+            call PrintString
+            pop rdi
             jmp return_here_after_jmp_table
 
 ;processInvalid:               ;//TODO
 ;            jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
-; Выводит символ в stdout
+; Выводит символ в stdout //FIXME без буферизации
 ;
 ; Entry: rdi = адрес, по которому лежит символ, который нужно напечатать
 ; Exit:  ...
@@ -211,6 +215,27 @@ PrintChar:
             pop rsi
             pop rdi
 
+            ret
+; ----------------------------------------------------------------------------------------
+; Выводит символ в stdout //FIXME без буферизации
+;
+; Entry: rdi = адрес, по которому лежит строка, которую нужно напечатать
+; Exit:  ...
+;
+; Destr: ...
+; ----------------------------------------------------------------------------------------
+PrintString:
+            push rsi
+            mov rsi, rdi            ; можно было бы и без использования rsi, т.к. мой PrintChar не меняет rdi,
+.print_loop:                        ; но так надёжнее
+            cmp byte [rsi], 0
+            je .exit
+            mov rdi, rsi
+            call PrintChar
+            inc rsi
+            jmp .print_loop
+.exit:
+            pop rsi
             ret
 
 ; ----------------------------------------------------------------------------------------
@@ -239,12 +264,12 @@ NumberToASCII:
 .number_is_positive:
             mov rbx, num_buffer + num_buffer_size - 1   ;rbx-конец буфера
 
+            xor r8, r8;                     ; счётчик разрядов (не rcx, так как в rcx будет сдвиг
             cmp rsi, 10                     ; //ДЕЛО СДЕЛАНО если СС кратна двум, то сдвиг вместо деления и побитовые операции
             jne .powers_of_two_base_process
 
 .ten_base_loop:
-            xor rcx, rcx        ; считаем количество разрядов
-            inc rcx
+            inc r8
             xor rdx, rdx        ; div считает делимым большое 128-битное число [rdx][rax]
             div rsi
             mov dl, [array_for_converting_numbers + rdx]
@@ -268,13 +293,12 @@ NumberToASCII:
             mov r9, 4
 
 .powers_of_two_base_loop:
+            inc r8
             mov rdx, rax
-
             cmp r9, 1
             jne .check_next_3
             and rdx, 1          ;mask = 1
             jmp .digit_ready
-
 .check_next_3:
             cmp r9, 3
             jne .check_next_4
@@ -294,6 +318,8 @@ NumberToASCII:
             jnz .powers_of_two_base_loop
 
 .output:
+            mov rcx, r8                         ; теперь в rcx количество разрядов в числе
+
             mov rax, 0x01
             mov rsi, num_buffer + num_buffer_size
             sub rsi, rcx
