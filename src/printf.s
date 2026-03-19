@@ -1,5 +1,3 @@
-; nasm -f elf64 -l 1-nasm.lst 1-nasm.s  ;  ld -s -o 1-nasm 1-nasm.o
-
 section .text
 
 global MyPrintf
@@ -240,9 +238,12 @@ NumberToASCII:
 
 .number_is_positive:
             mov rbx, num_buffer + num_buffer_size - 1   ;rbx-конец буфера
-            xor rcx, rcx                                ; считаем количество разрядов
 
-.loop:
+            cmp rsi, 10                     ; //ДЕЛО СДЕЛАНО если СС кратна двум, то сдвиг вместо деления и побитовые операции
+            jne .powers_of_two_base_process
+
+.ten_base_loop:
+            xor rcx, rcx        ; считаем количество разрядов
             inc rcx
             xor rdx, rdx        ; div считает делимым большое 128-битное число [rdx][rax]
             div rsi
@@ -250,8 +251,49 @@ NumberToASCII:
             mov [rbx], dl
             dec rbx             ; декрементируем, так как идем справа налево по буферу
             test rax, rax
-            jnz .loop           ; продолжаем до тех пор, пока не получим ноль
+            jnz .ten_base_loop  ; продолжаем до тех пор, пока не получим ноль
+            jmp .output
 
+.powers_of_two_base_process:
+            cmp rsi, 2
+            jne .next_check_1
+            mov r9, 1
+            jmp .powers_of_two_base_loop
+.next_check_1:
+            cmp rsi, 8
+            jne .next_check_2
+            mov r9, 3
+            jmp .powers_of_two_base_loop
+.next_check_2:
+            mov r9, 4
+
+.powers_of_two_base_loop:
+            mov rdx, rax
+
+            cmp r9, 1
+            jne .check_next_3
+            and rdx, 1          ;mask = 1
+            jmp .digit_ready
+
+.check_next_3:
+            cmp r9, 3
+            jne .check_next_4
+            and rdx, 7          ; mask = 7
+            jmp .digit_ready
+.check_next_4:
+            and rdx, 15         ; mask = 15
+            jmp .digit_ready                    ;//FIXME добавить бы еще ветку, которая обрабатывает ошибки, или пофиг?
+
+.digit_ready:
+            mov dl, [array_for_converting_numbers + rdx]
+            mov [rbx], dl
+            dec rbx
+            mov rcx, r9
+            shr rax, cl          ; в качестве второго операнда можно использовать только cl/константу
+            test rax, rax
+            jnz .powers_of_two_base_loop
+
+.output:
             mov rax, 0x01
             mov rsi, num_buffer + num_buffer_size
             sub rsi, rcx
