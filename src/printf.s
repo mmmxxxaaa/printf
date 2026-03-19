@@ -2,15 +2,15 @@
 
 section .text
 
-global _start
-
-_start:     mov rdi, test_format
-            mov rsi, 12
-            call MyPrintf
-
-            mov rax, 0x3C
-            xor rdi, rdi
-            syscall
+global MyPrintf
+;
+;_start:     mov rdi, test_format
+;            mov rsi, 12
+;            call MyPrintf
+;
+;            mov rax, 0x3C
+;            xor rdi, rdi
+;            syscall
 
 ; ----------------------------------------------------------------------------------------
 ; Главная функция printf, также является просто обёрткой для своеобразной функции printf, которая
@@ -185,8 +185,8 @@ processHex: push rdi
 processString:                ;//TODO
             jmp return_here_after_jmp_table
 
-processInvalid:               ;//TODO
-            jmp return_here_after_jmp_table
+;processInvalid:               ;//TODO
+;            jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
 ; Выводит символ в stdout
