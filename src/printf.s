@@ -1,7 +1,9 @@
 section .text
 
 global MyPrintf
-;
+
+;global _start
+
 ;_start:     mov rdi, test_format
 ;            mov rsi, 12
 ;            call MyPrintf
@@ -53,9 +55,12 @@ MyPrintf:
 ; ----------------------------------------------------------------------------------------
 ProcessingStack:
             push rbp
+            push r10            ; используем для счетчика символов в буфере
+            xor r10, r10
+
             mov rbp, rsp
 
-            add rbp, 16         ; в стеке до первого аргумента лежит еще [старое значение rbp] и [адрес возврата]
+            add rbp, 24         ; в стеке до первого аргумента лежит еще [r10] [старое значение rbp] и [адрес возврата]
 
 .printing_loop:
             cmp byte [rdi], 0
@@ -78,6 +83,8 @@ ProcessingStack:
             inc rdi
             jmp .printing_loop
 .exit:
+            call FlushBuffer
+            pop r10
             pop rbp
             ret
 
@@ -88,7 +95,7 @@ ProcessingStack:
 ;        rbp = адрес аргумента в стеке
 ;
 ; Exit:  rbp += 8, если всё хорошо
-;        rax = -1  если произошла ошибка //FIXME обрабатывать ошибки
+;        rax = -1  если произошла ошибка
 ; Destr: rax, rcx
 ; ----------------------------------------------------------------------------------------
 SpecialSymbolProc:
@@ -105,7 +112,7 @@ return_here_after_jmp_table:
             add rbp, 8
             ret
 processInvalid:
-            mov rax, -1                   ;//FIXME обрабатывать ошибки
+            mov rax, -1
             ret
 
 ; ----------------------------------------------------------------------------------------
@@ -180,18 +187,15 @@ processHex: push rdi
             pop rdi
             jmp return_here_after_jmp_table
 
-processString:                ;//TODO
+processString:
             push rdi
             mov rdi, [rbp]
             call PrintString
             pop rdi
             jmp return_here_after_jmp_table
 
-;processInvalid:               ;//TODO
-;            jmp return_here_after_jmp_table
-
 ; ----------------------------------------------------------------------------------------
-; Выводит символ в stdout //FIXME без буферизации
+; Сохраняет символ в буфер
 ;
 ; Entry: rdi = адрес, по которому лежит символ, который нужно напечатать
 ; Exit:  ...
@@ -199,16 +203,41 @@ processString:                ;//TODO
 ; Destr: ...
 ; ----------------------------------------------------------------------------------------
 PrintChar:
-            push rdi            ; сохрянем регистры, которые испортим при syscall
+            cmp r10, print_buffer_size
+            jb .no_flush
+
+            call FlushBuffer
+
+.no_flush:
+            mov al, [rdi]
+            mov byte [print_buffer + r10], al       ;нельзя 2 операнда в памяти, надо через регистр
+
+            inc r10
+
+            ret
+
+; ----------------------------------------------------------------------------------------
+; Выводит символ в stdout //FIXME без буферизации
+;
+; Entry: rdi = адрес, по которому лежит символ, который нужно напечатать
+;        r10 = количество символов, которое нужно напечатать
+; Exit:  ...
+;
+; Destr: ...
+; ----------------------------------------------------------------------------------------
+FlushBuffer:
+            push rdi                    ; сохрянем регистры, которые испортим при syscall
             push rsi
             push rdx
             push rax
 
-            mov rax, 0x01       ; syscall of "write"
-            mov rsi, rdi        ; адрес буфера
-            mov rdi, 1          ; файловый дескриптор stdout
-            mov rdx, 1          ; количество символов для вывода
+            mov rax, 0x01               ; syscall of "write"
+            mov rsi, print_buffer       ; адрес буфера
+            mov rdi, 1                  ; файловый дескриптор stdout
+            mov rdx, r10                ; количество символов для вывода
             syscall
+
+            xor r10, r10
 
             pop rax
             pop rdx
@@ -242,15 +271,17 @@ PrintString:
 ; Переводит число в набор ASCII кодов для вывода в консоль
 ; Entry: rdi = адрес, по которому лежит начало числа
 ;        rsi = основание системы счисления
-;
+;                                                   // FIXME тут нет буферизации
 ; Destr:
 ; ----------------------------------------------------------------------------------------
 NumberToASCII:
             push rax            ; используется для хранения значения числа
             push rbx            ; используется для адресации к буферу
-            push rcx            ; используется для подсчёта количества разрядов
+            push rcx            ; cl используется для сдвига, rcx в конце используется для syscall
             push rdx            ; занулим его перед делением (то есть испортим)
             push rdi            ; испортим его минусом/испортим при syscall
+            push r8             ; используется для подсчёта количества разрядов
+            push r9             ; используем для хранения сдвига в зависимости от основания СС, кратной двум
 
             mov rax, [rdi]      ; в rax число, которое нужно напечатать
             test rax, rax
@@ -264,7 +295,7 @@ NumberToASCII:
 .number_is_positive:
             mov rbx, num_buffer + num_buffer_size - 1   ;rbx-конец буфера
 
-            xor r8, r8;                     ; счётчик разрядов (не rcx, так как в rcx будет сдвиг
+            xor r8, r8;                     ; счётчик разрядов (не rcx, так как в rcx будет сдвиг)
             cmp rsi, 10                     ; //ДЕЛО СДЕЛАНО если СС кратна двум, то сдвиг вместо деления и побитовые операции
             jne .powers_of_two_base_process
 
@@ -319,14 +350,21 @@ NumberToASCII:
 
 .output:
             mov rcx, r8                         ; теперь в rcx количество разрядов в числе
-
-            mov rax, 0x01
             mov rsi, num_buffer + num_buffer_size
             sub rsi, rcx
-            mov rdi, 1
-            mov rdx, rcx
-            syscall
 
+.printing_loop:
+            test rcx, rcx
+            jz .done
+
+            mov rdi, rsi
+            call PrintChar
+            inc rsi
+            dec rcx
+            jmp .printing_loop
+.done:
+            pop r9
+            pop r8
             pop rdi
             pop rdx
             pop rcx
@@ -339,10 +377,14 @@ NumberToASCII:
 section     .data
 
 
-num_buffer_size equ 64
-num_buffer:  db num_buffer_size dup(0)
-test_format: db "check = %o", 0xd, 0xa, 0
-test_string: db "test string", 0
+num_buffer_size     equ 64
+num_buffer:         db num_buffer_size dup(0)
+print_buffer_size   equ 64
+print_buffer:       db print_buffer_size dup(0)
+
+test_format:        db "check = %o", 0xd, 0xa, 0
+test_string:        db "test string", 0
+
 array_for_converting_numbers: db "0123456789ABCDEF"
 jump_table:
             dq processInvalid ; a
