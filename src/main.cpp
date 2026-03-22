@@ -1,4 +1,4 @@
-extern "C" void MyPrintf(const char* format, ...);
+#include "../include/my_io.h"
 
 int main()
 {
