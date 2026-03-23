@@ -8,7 +8,7 @@ global MyPrintf
 ;            mov rsi, 12
 ;            call MyPrintf
 ;
-;            mov rax, 0x3C
+;            mov rax, syscall_of_exit
 ;            xor rdi, rdi
 ;            syscall
 
@@ -59,10 +59,9 @@ ProcessingStack:
             xor r10, r10
 
             mov rbp, rsp
-
-            add rbp, 24         ; в стеке до первого аргумента лежит еще [r10] [старое значение rbp] и [адрес возврата]
+            add rbp, 24         ; в стеке до первого аргумента лежит еще [r10]; [старое значение rbp] и [адрес возврата]
 .printing_loop:
-            cmp byte [rdi], 0
+            cmp byte [rdi], 0       ; выводим символы, пока не встретим терминирующий нулевой байт
             je .exit
 
             cmp byte [rdi], '%'
@@ -73,7 +72,7 @@ ProcessingStack:
             je .common_symbol
 
             call SpecialSymbolProc
-            cmp rax, -1
+            cmp rax, -1             ; обрабатываем ошибку
             je .exit
             inc rdi
             jmp .printing_loop
@@ -103,9 +102,9 @@ SpecialSymbolProc:
             cmp byte [rdi], 'z'
             ja processInvalid
 
-            xor rcx, rcx           ;!!!
-            mov cl, [rdi]
-            mov rcx, [jump_table - 8*('a' - rcx)]
+            xor rcx, rcx            ;!!!
+            mov cl, [rdi]           ;берем ASCII код символа, лежащего по адресу [rdi]
+            mov rcx, [jump_table + 8*(rcx - 'a')]
             jmp rcx
 return_here_after_jmp_table:
             add rbp, 8
@@ -230,9 +229,9 @@ FlushBuffer:
             push rdx
             push rax
 
-            mov rax, 0x01               ; syscall of "write"
+            mov rax, syscall_of_write   ; syscall of "write"
             mov rsi, print_buffer       ; адрес буфера
-            mov rdi, 1                  ; файловый дескриптор stdout
+            mov rdi, stdout_descr       ; файловый дескриптор stdout
             mov rdx, r10                ; количество символов для вывода
             syscall
 
@@ -245,7 +244,7 @@ FlushBuffer:
 
             ret
 ; ----------------------------------------------------------------------------------------
-; Выводит символ в stdout //FIXME без буферизации
+; Выводит символ в stdout
 ;
 ; Entry: rdi = адрес, по которому лежит строка, которую нужно напечатать
 ; Exit:  ...
@@ -255,7 +254,7 @@ FlushBuffer:
 PrintString:
             push rsi
             mov rsi, rdi            ; можно было бы и без использования rsi, т.к. мой PrintChar не меняет rdi,
-.print_loop:                        ; но так надёжнее
+.print_loop:                        ; но так надёжнее, чтобы не зависеть от того, сохраняет ли PrintChar rdi
             cmp byte [rsi], 0
             je .exit
             mov rdi, rsi
@@ -270,7 +269,7 @@ PrintString:
 ; Переводит число в набор ASCII кодов для вывода в консоль
 ; Entry: rdi = адрес, по которому лежит начало числа
 ;        rsi = основание системы счисления
-;                                                   // FIXME тут нет буферизации
+;
 ; Destr:
 ; ----------------------------------------------------------------------------------------
 NumberToASCII:
@@ -376,6 +375,10 @@ NumberToASCII:
 section     .data
 
 
+syscall_of_write    equ 0x01
+syscall_of_exit     equ 0x3C
+
+stdout_descr        equ 1
 num_buffer_size     equ 64
 num_buffer:         db num_buffer_size dup(0)
 print_buffer_size   equ 64
