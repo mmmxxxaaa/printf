@@ -56,13 +56,15 @@ MyPrintf:
 ProcessingStack:
             push rbp
             push r10            ; используем для счетчика символов в буфере
+            push r12
             xor r10, r10
+            xor r12, r12
 
             mov rbp, rsp        ;
-            add rbp, 24         ; в стеке до первого аргумента лежит еще [r10]; [старое значение rbp] и [адрес возврата]
+            add rbp, 32         ; в стеке до первого аргумента лежит еще [r12], [r10]; [старое значение rbp] и [адрес возврата]
 .printing_loop:
             cmp byte [rdi], 0       ; выводим символы, пока не встретим терминирующий нулевой байт
-            je .exit
+            je .exit_ok
 
             cmp byte [rdi], '%'
             jne .common_symbol
@@ -73,15 +75,23 @@ ProcessingStack:
 
             call SpecialSymbolProc
             cmp rax, -1             ; обрабатываем ошибку
-            je .exit
+            je .exit_error
             inc rdi
             jmp .printing_loop
 .common_symbol:
             call PrintChar
             inc rdi
             jmp .printing_loop
-.exit:
+.exit_ok:
             call FlushBuffer
+            mov rax, r12
+            pop r12
+            pop r10
+            pop rbp
+            ret
+.exit_error:
+            mov rax, -1             ;//FIXME там вроде уже единица лежит
+            pop r12
             pop r10
             pop rbp
             ret
@@ -208,6 +218,7 @@ PrintChar:
             call FlushBuffer
 
 .no_flush:
+            inc r12
             mov al, [rdi]
             mov byte [print_buffer + r10], al       ;нельзя 2 операнда в памяти, надо через регистр
 
@@ -230,6 +241,7 @@ FlushBuffer:
             push rdx
             push rax
             push rcx                    ; //ЭТО ИМЕННО РЕСПЕКТ syscall всегда ломает rcx и r11
+            push r11
 
             mov rax, syscall_of_write   ; syscall of "write"
             mov rsi, print_buffer       ; адрес буфера
@@ -239,6 +251,7 @@ FlushBuffer:
 
             xor r10, r10
 
+            pop r11
             pop rcx
             pop rax
             pop rdx
