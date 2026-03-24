@@ -5,7 +5,7 @@ global MyPrintf
 ;global _start
 
 ;_start:     mov rdi, test_format
-;            mov rsi, 12
+;            mov rsi, -1
 ;            call MyPrintf
 ;
 ;            mov rax, syscall_of_exit
@@ -58,7 +58,7 @@ ProcessingStack:
             push r10            ; используем для счетчика символов в буфере
             xor r10, r10
 
-            mov rbp, rsp
+            mov rbp, rsp        ;
             add rbp, 24         ; в стеке до первого аргумента лежит еще [r10]; [старое значение rbp] и [адрес возврата]
 .printing_loop:
             cmp byte [rdi], 0       ; выводим символы, пока не встретим терминирующий нулевой байт
@@ -201,6 +201,7 @@ processString:
 ; Destr: ...
 ; ----------------------------------------------------------------------------------------
 PrintChar:
+            push rax                            ;//FIXME
             cmp r10, print_buffer_size
             jb .no_flush
 
@@ -211,11 +212,11 @@ PrintChar:
             mov byte [print_buffer + r10], al       ;нельзя 2 операнда в памяти, надо через регистр
 
             inc r10
-
+            pop rax
             ret
 
 ; ----------------------------------------------------------------------------------------
-; Выводит символ в stdout
+; Выводит буфер в stdout
 ;
 ; Entry: rdi = адрес, по которому лежит символ, который нужно напечатать
 ;        r10 = количество символов, которое нужно напечатать
@@ -228,6 +229,7 @@ FlushBuffer:
             push rsi
             push rdx
             push rax
+            push rcx                    ; //ЭТО ИМЕННО РЕСПЕКТ syscall всегда ломает rcx и r11
 
             mov rax, syscall_of_write   ; syscall of "write"
             mov rsi, print_buffer       ; адрес буфера
@@ -237,6 +239,7 @@ FlushBuffer:
 
             xor r10, r10
 
+            pop rcx
             pop rax
             pop rdx
             pop rsi
@@ -281,14 +284,21 @@ NumberToASCII:
             push r8             ; используется для подсчёта количества разрядов
             push r9             ; используем для хранения сдвига в зависимости от основания СС, кратной двум
 
-            mov rax, [rdi]      ; в rax число, которое нужно напечатать
-            test rax, rax
-            jns .number_is_positive
+            mov eax, [rdi]      ; в eax число, которое нужно напечатать
+                                ; важно, что именно в eax, иначе он будет их воспринимать как большие положительные
+
+            cmp eax, 0
+            jge .number_is_positive
+            ;test eax, eax          ;//FIXME
+            ;jns .number_is_positive
 
 .number_is_negative:
-            mov rdi, '-'
+            ;push rdi                ;//FIXME
+            mov rdi, minus_symbol
             call PrintChar
-            neg rax
+            ;pop rdi
+            neg eax
+
 
 .number_is_positive:
             mov rbx, num_buffer + num_buffer_size - 1   ;rbx-конец буфера
@@ -335,7 +345,7 @@ NumberToASCII:
             jmp .digit_ready
 .check_next_4:
             and rdx, 15         ; mask = 15
-            jmp .digit_ready                    ;//FIXME добавить бы еще ветку, которая обрабатывает ошибки, или пофиг?
+            jmp .digit_ready
 
 .digit_ready:
             mov dl, [array_for_converting_numbers + rdx]
@@ -374,7 +384,6 @@ NumberToASCII:
 
 section     .data
 
-
 syscall_of_write    equ 0x01
 syscall_of_exit     equ 0x3C
 
@@ -383,8 +392,8 @@ num_buffer_size     equ 64
 num_buffer:         db num_buffer_size dup(0)
 print_buffer_size   equ 64
 print_buffer:       db print_buffer_size dup(0)
-
-test_format:        db "check = %o", 0xd, 0xa, 0
+minus_symbol:       db '-'
+test_format:        db "check = %d", 0xd, 0xa, 0
 test_string:        db "test string", 0
 
 array_for_converting_numbers: db "0123456789ABCDEF"
