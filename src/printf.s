@@ -124,6 +124,7 @@ processBinary:
             push rdi
             mov rdi, rbp
             mov rsi, 2
+            clc
             call NumberToASCII
             pop rdi
             jmp return_here_after_jmp_table
@@ -142,6 +143,67 @@ processChar:
             pop rdi
             jmp return_here_after_jmp_table
 
+processLSpecifier:
+            inc rdi
+            push rdi                ; сохраняем после увеличения на 1
+            cmp byte [rdi], 'd'
+            je handle_ok
+            cmp byte [rdi], 'b'
+            je handle_ok
+            cmp byte [rdi], 'o'
+            je handle_ok
+            cmp byte [rdi], 'x'
+            je handle_ok
+            pop rdi
+            jmp processInvalid
+handle_ok:
+            xor rcx, rcx            ;!!!
+            mov cl, [rdi]           ;берем ASCII код символа, лежащего по адресу [rdi]
+            mov rcx, [mini_jump_table + 8*(rcx - 'a')]
+            jmp rcx
+return_here_after_mini_jmp_table:
+            pop rdi
+            jmp return_here_after_jmp_table
+
+miniHandleBinary:
+            push rdi
+            mov rdi, rbp
+            mov rsi, 2
+            stc
+            call NumberToASCII
+            pop rdi
+            jmp return_here_after_mini_jmp_table
+
+miniHandleDecimal:
+            push rdi
+            mov rdi, rbp
+            mov rsi, 10
+            stc
+            call NumberToASCII
+            pop rdi
+            jmp return_here_after_mini_jmp_table
+
+miniHandleOct:
+            push rdi
+            mov rdi, rbp
+            mov rsi, 8
+            stc
+            call NumberToASCII
+            pop rdi
+            jmp return_here_after_mini_jmp_table
+
+miniHandleHex:
+            push rdi
+            mov rdi, rbp
+            mov rsi, 16
+            stc
+            call NumberToASCII
+            pop rdi
+            jmp return_here_after_mini_jmp_table
+
+miniHandleInvalid:
+            jmp processInvalid
+
 ; ----------------------------------------------------------------------------------------
 ; НЕ функция, а просто обработчик вывода символа в десятичной системе счисления
 ;
@@ -158,15 +220,6 @@ processDecimal:
             pop rdi
             jmp return_here_after_jmp_table
 
-processLongDecimal:
-            push rdi
-            mov rdi, rbp
-            mov rsi, 10
-            stc
-            call NumberToASCII
-            pop rdi
-            jmp return_here_after_jmp_table
-
 ; ----------------------------------------------------------------------------------------
 ; НЕ функция, а просто обработчик вывода символа в восьмеричной системе счисления
 ;
@@ -177,6 +230,7 @@ processLongDecimal:
 processOct: push rdi
             mov rdi, rbp
             mov rsi, 8
+            clc
             call NumberToASCII
             pop rdi
             jmp return_here_after_jmp_table
@@ -191,6 +245,7 @@ processOct: push rdi
 processHex: push rdi
             mov rdi, rbp
             mov rsi, 16
+            clc
             call NumberToASCII
             pop rdi
             jmp return_here_after_jmp_table
@@ -431,8 +486,8 @@ jump_table:
             dq processInvalid     ; i
             dq processInvalid     ; j
             dq processInvalid     ; k
-            dq processInvalid     ; l
-            dq processLongDecimal ; m       // long decimal
+            dq processLSpecifier  ; l
+            dq processInvalid     ; m       // long decimal
             dq processInvalid     ; n
             dq processOct         ; o
             dq processInvalid     ; p
@@ -446,3 +501,31 @@ jump_table:
             dq processHex         ; x
             dq processInvalid     ; y
             dq processInvalid     ; z
+
+mini_jump_table:
+            dq miniHandleInvalid     ; a
+            dq miniHandleBinary      ; b
+            dq miniHandleInvalid     ; c
+            dq miniHandleDecimal     ; d
+            dq miniHandleInvalid     ; e
+            dq miniHandleInvalid     ; f
+            dq miniHandleInvalid     ; g
+            dq miniHandleInvalid     ; h
+            dq miniHandleInvalid     ; i
+            dq miniHandleInvalid     ; j
+            dq miniHandleInvalid     ; k
+            dq miniHandleInvalid     ; l
+            dq miniHandleInvalid     ; m
+            dq miniHandleInvalid     ; n
+            dq miniHandleOct         ; o
+            dq miniHandleInvalid     ; p
+            dq miniHandleInvalid     ; q
+            dq miniHandleInvalid     ; r
+            dq miniHandleInvalid     ; s
+            dq miniHandleInvalid     ; t
+            dq miniHandleInvalid     ; u
+            dq miniHandleInvalid     ; v
+            dq miniHandleInvalid     ; w
+            dq miniHandleHex         ; x
+            dq miniHandleInvalid     ; y
+            dq miniHandleInvalid     ; z
