@@ -404,8 +404,6 @@ NumberToASCII:
             inc r8
             mov rdx, rax
             and rdx, r11
-            jmp .digit_ready
-.digit_ready:
             mov dl, [array_for_converting_numbers + rdx]
             mov [rbx], dl
             dec rbx
