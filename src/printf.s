@@ -2,6 +2,15 @@ section .text
 
 global MyPrintf
 
+%macro  PRINT_NUMBER 2
+        push rdi
+        mov rdi, rbp
+        mov rsi, %1
+        %2
+        call NumberToASCII
+        pop rdi
+%endmacro
+
 ; ----------------------------------------------------------------------------------------
 ; Главная функция printf, также является просто обёрткой для своеобразной функции printf, которая
 ; работает только со стеком
@@ -114,22 +123,6 @@ processInvalid:
             ret
 
 ; ----------------------------------------------------------------------------------------
-; НЕ функция, а просто обработчик вывода символа в двоичной системе счисления
-;
-; Entry: rbp = адрес, по которому лежит число, которое нужно напечатать в двоичной системе счисления
-; Exit:
-; Destr: rsi, r10, r12
-; ----------------------------------------------------------------------------------------
-processBinary:
-            push rdi
-            mov rdi, rbp
-            mov rsi, 2
-            clc
-            call NumberToASCII
-            pop rdi
-            jmp return_here_after_jmp_table
-
-; ----------------------------------------------------------------------------------------
 ; НЕ функция, а просто обработчик вывода одного символа
 ;
 ; Entry: rbp = адрес, по которому лежит символ, который нужно напечатать
@@ -143,6 +136,19 @@ processChar:
             pop rdi
             jmp return_here_after_jmp_table
 
+; ----------------------------------------------------------------------------------------
+; Обработчик модификатора длины 'l' (long). Если следующий символ один из 'd', 'b', 'o', 'x',
+; то выводит 64-битное число в соответствующей системе счисления. Иначе вызывает обработку ошибки
+;
+; Entry: rdi = адрес символа 'l' в форматной строке
+;        rbp = адрес текущего аргумента в стеке (указывает на 64-битное значение)
+;
+; Exit:  при успехе rdi смещается на два символа (за спецификатор),
+;        rbp увеличивается на 8 (переход к следующему аргументу)
+;        при ошибке возвращается -1 через processInvalid
+;
+; Destr: rax, rcx, r10, r12 (через NumberToASCII и PrintChar)
+; ----------------------------------------------------------------------------------------
 processLSpecifier:
             inc rdi
             push rdi                ; сохраняем после увеличения на 1
@@ -166,43 +172,34 @@ return_here_after_mini_jmp_table:
             jmp return_here_after_jmp_table
 
 miniHandleBinary:
-            push rdi
-            mov rdi, rbp
-            mov rsi, 2
-            stc
-            call NumberToASCII
-            pop rdi
+            PRINT_NUMBER 2, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleDecimal:
-            push rdi
-            mov rdi, rbp
-            mov rsi, 10
-            stc
-            call NumberToASCII
-            pop rdi
+            PRINT_NUMBER 10, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleOct:
-            push rdi
-            mov rdi, rbp
-            mov rsi, 8
-            stc
-            call NumberToASCII
-            pop rdi
+            PRINT_NUMBER 8, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleHex:
-            push rdi
-            mov rdi, rbp
-            mov rsi, 16
-            stc
-            call NumberToASCII
-            pop rdi
+            PRINT_NUMBER 16, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleInvalid:
             jmp processInvalid
+
+; ----------------------------------------------------------------------------------------
+; НЕ функция, а просто обработчик вывода символа в двоичной системе счисления
+;
+; Entry: rbp = адрес, по которому лежит число, которое нужно напечатать в двоичной системе счисления
+; Exit:
+; Destr: rsi, r10, r12
+; ----------------------------------------------------------------------------------------
+processBinary:
+            PRINT_NUMBER 2, clc
+            jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
 ; НЕ функция, а просто обработчик вывода символа в десятичной системе счисления
@@ -212,12 +209,7 @@ miniHandleInvalid:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processDecimal:
-            push rdi
-            mov rdi, rbp
-            mov rsi, 10
-            clc
-            call NumberToASCII
-            pop rdi
+            PRINT_NUMBER 10, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -227,7 +219,8 @@ processDecimal:
 ; Exit:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
-processOct: push rdi
+processOct:
+            push rdi
             mov rdi, rbp
             mov rsi, 8
             clc
@@ -242,12 +235,8 @@ processOct: push rdi
 ; Exit:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
-processHex: push rdi
-            mov rdi, rbp
-            mov rsi, 16
-            clc
-            call NumberToASCII
-            pop rdi
+processHex:
+            PRINT_NUMBER 16, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -487,7 +476,7 @@ jump_table:
             dq processInvalid     ; j
             dq processInvalid     ; k
             dq processLSpecifier  ; l
-            dq processInvalid     ; m       // long decimal
+            dq processInvalid     ; m
             dq processInvalid     ; n
             dq processOct         ; o
             dq processInvalid     ; p
@@ -503,29 +492,29 @@ jump_table:
             dq processInvalid     ; z
 
 mini_jump_table:
-            dq miniHandleInvalid     ; a
-            dq miniHandleBinary      ; b
-            dq miniHandleInvalid     ; c
-            dq miniHandleDecimal     ; d
-            dq miniHandleInvalid     ; e
-            dq miniHandleInvalid     ; f
-            dq miniHandleInvalid     ; g
-            dq miniHandleInvalid     ; h
-            dq miniHandleInvalid     ; i
-            dq miniHandleInvalid     ; j
-            dq miniHandleInvalid     ; k
-            dq miniHandleInvalid     ; l
-            dq miniHandleInvalid     ; m
-            dq miniHandleInvalid     ; n
-            dq miniHandleOct         ; o
-            dq miniHandleInvalid     ; p
-            dq miniHandleInvalid     ; q
-            dq miniHandleInvalid     ; r
-            dq miniHandleInvalid     ; s
-            dq miniHandleInvalid     ; t
-            dq miniHandleInvalid     ; u
-            dq miniHandleInvalid     ; v
-            dq miniHandleInvalid     ; w
-            dq miniHandleHex         ; x
-            dq miniHandleInvalid     ; y
-            dq miniHandleInvalid     ; z
+            dq miniHandleInvalid  ; a
+            dq miniHandleBinary   ; b
+            dq miniHandleInvalid  ; c
+            dq miniHandleDecimal  ; d
+            dq miniHandleInvalid  ; e
+            dq miniHandleInvalid  ; f
+            dq miniHandleInvalid  ; g
+            dq miniHandleInvalid  ; h
+            dq miniHandleInvalid  ; i
+            dq miniHandleInvalid  ; j
+            dq miniHandleInvalid  ; k
+            dq miniHandleInvalid  ; l
+            dq miniHandleInvalid  ; m
+            dq miniHandleInvalid  ; n
+            dq miniHandleOct      ; o
+            dq miniHandleInvalid  ; p
+            dq miniHandleInvalid  ; q
+            dq miniHandleInvalid  ; r
+            dq miniHandleInvalid  ; s
+            dq miniHandleInvalid  ; t
+            dq miniHandleInvalid  ; u
+            dq miniHandleInvalid  ; v
+            dq miniHandleInvalid  ; w
+            dq miniHandleHex      ; x
+            dq miniHandleInvalid  ; y
+            dq miniHandleInvalid  ; z
