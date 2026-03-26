@@ -2,16 +2,6 @@ section .text
 
 global MyPrintf
 
-;global _start
-
-;_start:     mov rdi, test_format
-;            mov rsi, -1
-;            call MyPrintf
-;
-;            mov rax, syscall_of_exit
-;            xor rdi, rdi
-;            syscall
-
 ; ----------------------------------------------------------------------------------------
 ; Главная функция printf, также является просто обёрткой для своеобразной функции printf, которая
 ; работает только со стеком
@@ -55,13 +45,13 @@ MyPrintf:
 ; ----------------------------------------------------------------------------------------
 ProcessingStack:
             push rbp
-            push r10            ; используем для счетчика символов в буфере
+            push r10                ; используем для счетчика символов в буфере
             push r12
             xor r10, r10
             xor r12, r12
 
-            mov rbp, rsp        ;
-            add rbp, 32         ; в стеке до первого аргумента лежит еще [r12], [r10]; [старое значение rbp] и [адрес возврата]
+            mov rbp, rsp
+            add rbp, 32             ; в стеке до первого аргумента лежит еще [r12], [r10]; [старое значение rbp] и [адрес возврата]
 .printing_loop:
             cmp byte [rdi], 0       ; выводим символы, пока не встретим терминирующий нулевой байт
             je .exit_ok
@@ -90,7 +80,7 @@ ProcessingStack:
             pop rbp
             ret
 .exit_error:
-            mov rax, -1             ;//FIXME там вроде уже единица лежит
+            mov rax, -1
             pop r12
             pop r10
             pop rbp
@@ -219,12 +209,11 @@ processString:
 ; Destr: ...
 ; ----------------------------------------------------------------------------------------
 PrintChar:
-            push rax                            ;//FIXME
+            push rax
             cmp r10, print_buffer_size
             jb .no_flush
 
             call FlushBuffer
-
 .no_flush:
             inc r12
             mov al, [rdi]
@@ -251,8 +240,8 @@ FlushBuffer:
             push r11
 
             mov rax, syscall_of_write   ; syscall of "write"
-            mov rsi, print_buffer       ; адрес буфера
             mov rdi, stdout_descr       ; файловый дескриптор stdout
+            mov rsi, print_buffer       ; адрес буфера
             mov rdx, r10                ; количество символов для вывода
             syscall
 
@@ -316,53 +305,49 @@ NumberToASCII:
             call PrintChar
             neg eax
 
-
 .number_is_positive:
             mov rbx, num_buffer + num_buffer_size - 1   ;rbx-конец буфера
 
             xor r8, r8;                     ; счётчик разрядов (не rcx, так как в rcx будет сдвиг)
             cmp rsi, 10                     ; //ДЕЛО СДЕЛАНО если СС кратна двум, то сдвиг вместо деления и побитовые операции
             jne .powers_of_two_base_process
-
 .ten_base_loop:
             inc r8
-            xor rdx, rdx        ; div считает делимым большое 128-битное число [rdx][rax]
+            xor rdx, rdx                    ; div считает делимым большое 128-битное число [rdx][rax]
             div rsi
             mov dl, [array_for_converting_numbers + rdx]
             mov [rbx], dl
-            dec rbx             ; декрементируем, так как идем справа налево по буферу
+            dec rbx                         ; декрементируем, так как идем справа налево по буферу
             test rax, rax
-            jnz .ten_base_loop  ; продолжаем до тех пор, пока не получим ноль
+            jnz .ten_base_loop              ; продолжаем до тех пор, пока не получим ноль
             jmp .output
 
 .powers_of_two_base_process:
             cmp rsi, 2
-            jne .next_check_1
-            mov r9, 1
-            mov r11, 1
+            jne .check_for_oct
+            mov r9, shift_for_binary
+            mov r11, mask_for_binary
             jmp .powers_of_two_base_loop
-.next_check_1:
+.check_for_oct:
             cmp rsi, 8
-            jne .next_check_2
-            mov r9, 3
-            mov r11, 7
+            jne .check_for_hex
+            mov r9, shift_for_oct
+            mov r11, mask_for_oct
             jmp .powers_of_two_base_loop
-.next_check_2:
-            mov r9, 4
-            mov r11, 15
-
+.check_for_hex:
+            mov r9, shift_for_hex
+            mov r11, mask_for_hex
 .powers_of_two_base_loop:
             inc r8
             mov rdx, rax
             and rdx, r11
             jmp .digit_ready
-
 .digit_ready:
             mov dl, [array_for_converting_numbers + rdx]
             mov [rbx], dl
             dec rbx
             mov rcx, r9
-            shr rax, cl          ; в качестве второго операнда можно использовать только cl/константу
+            shr rax, cl                         ; в качестве второго операнда можно использовать только cl/константу
             test rax, rax
             jnz .powers_of_two_base_loop
 
@@ -370,7 +355,6 @@ NumberToASCII:
             mov rcx, r8                         ; теперь в rcx количество разрядов в числе
             mov rsi, num_buffer + num_buffer_size
             sub rsi, rcx
-
 .printing_loop:
             test rcx, rcx
             jz .done
@@ -395,8 +379,16 @@ NumberToASCII:
 
 section     .data
 
+shift_for_binary    equ 1
+mask_for_binary     equ 1
+
+shift_for_oct       equ 3
+mask_for_oct        equ 7
+
+shift_for_hex       equ 4
+mask_for_hex        equ 15
+
 syscall_of_write    equ 0x01
-syscall_of_exit     equ 0x3C
 
 stdout_descr        equ 1
 
@@ -405,10 +397,7 @@ num_buffer:         db num_buffer_size dup(0)
 print_buffer_size   equ 64
 print_buffer:       db print_buffer_size dup(0)
 
-mask_for_converting db 0
 minus_symbol:       db '-'
-test_format:        db "check = %d", 0xd, 0xa, 0
-test_string:        db "test string", 0
 
 array_for_converting_numbers: db "0123456789ABCDEF"
 jump_table:
