@@ -267,7 +267,7 @@ FlushBuffer:
 
             ret
 ; ----------------------------------------------------------------------------------------
-; Выводит символ в stdout
+; Выводит строку, переданную в качестве аргумента к спецификатору %s
 ;
 ; Entry: rdi = адрес, по которому лежит строка, которую нужно напечатать
 ; Exit: r10, r12 увеличиваются на длину строки
@@ -303,20 +303,17 @@ NumberToASCII:
             push rdi            ; испортим его минусом/испортим при syscall
             push r8             ; используется для подсчёта количества разрядов
             push r9             ; используем для хранения сдвига в зависимости от основания СС, кратной двум
+            push r11            ; используем для хранения маски  в зависимости от основания СС, кратной двум
 
             mov eax, [rdi]      ; в eax число, которое нужно напечатать
                                 ; важно, что именно в eax, иначе он будет их воспринимать как большие положительные
 
             cmp eax, 0
             jge .number_is_positive
-            ;test eax, eax          ;//FIXME
-            ;jns .number_is_positive
 
 .number_is_negative:
-            ;push rdi                ;//FIXME
             mov rdi, minus_symbol
             call PrintChar
-            ;pop rdi
             neg eax
 
 
@@ -342,29 +339,22 @@ NumberToASCII:
             cmp rsi, 2
             jne .next_check_1
             mov r9, 1
+            mov r11, 1
             jmp .powers_of_two_base_loop
 .next_check_1:
             cmp rsi, 8
             jne .next_check_2
             mov r9, 3
+            mov r11, 7
             jmp .powers_of_two_base_loop
 .next_check_2:
             mov r9, 4
+            mov r11, 15
 
 .powers_of_two_base_loop:
             inc r8
             mov rdx, rax
-            cmp r9, 1
-            jne .check_next_3
-            and rdx, 1          ;mask = 1
-            jmp .digit_ready
-.check_next_3:
-            cmp r9, 3
-            jne .check_next_4
-            and rdx, 7          ; mask = 7
-            jmp .digit_ready
-.check_next_4:
-            and rdx, 15         ; mask = 15
+            and rdx, r11
             jmp .digit_ready
 
 .digit_ready:
@@ -391,6 +381,7 @@ NumberToASCII:
             dec rcx
             jmp .printing_loop
 .done:
+            pop r11
             pop r9
             pop r8
             pop rdi
@@ -408,10 +399,13 @@ syscall_of_write    equ 0x01
 syscall_of_exit     equ 0x3C
 
 stdout_descr        equ 1
+
 num_buffer_size     equ 64
 num_buffer:         db num_buffer_size dup(0)
 print_buffer_size   equ 64
 print_buffer:       db print_buffer_size dup(0)
+
+mask_for_converting db 0
 minus_symbol:       db '-'
 test_format:        db "check = %d", 0xd, 0xa, 0
 test_string:        db "test string", 0
