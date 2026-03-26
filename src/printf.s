@@ -153,6 +153,16 @@ processDecimal:
             push rdi
             mov rdi, rbp
             mov rsi, 10
+            clc
+            call NumberToASCII
+            pop rdi
+            jmp return_here_after_jmp_table
+
+processLongDecimal:
+            push rdi
+            mov rdi, rbp
+            mov rsi, 10
+            stc
             call NumberToASCII
             pop rdi
             jmp return_here_after_jmp_table
@@ -281,6 +291,8 @@ PrintString:
 ; Переводит число в набор ASCII кодов для вывода в консоль
 ; Entry: rdi = адрес, по которому лежит начало числа
 ;        rsi = основание системы счисления
+;        CF  = 0 работаем с 32-битным числом
+;        CF  = 1 работаем с 64-битным числом
 ; Exit:  r10, r12 увеличиваются на количество выведенных цифр (плюс знак, если отрицательное)
 ; Destr: rsi
 ; ----------------------------------------------------------------------------------------
@@ -294,16 +306,23 @@ NumberToASCII:
             push r9             ; используем для хранения сдвига в зависимости от основания СС, кратной двум
             push r11            ; используем для хранения маски  в зависимости от основания СС, кратной двум
 
+            jc .working_with_64
             mov eax, [rdi]      ; в eax число, которое нужно напечатать
                                 ; важно, что именно в eax, иначе он будет их воспринимать как большие положительные
+            cdqe                ; используем знаковое расширение eax до rax
+            jmp .check_sign
 
-            cmp eax, 0
+.working_with_64:
+            mov rax, [rdi]
+
+.check_sign:
+            cmp rax, 0
             jge .number_is_positive
 
 .number_is_negative:
             mov rdi, minus_symbol
             call PrintChar
-            neg eax
+            neg rax
 
 .number_is_positive:
             mov rbx, num_buffer + num_buffer_size - 1   ;rbx-конец буфера
@@ -401,29 +420,29 @@ minus_symbol:       db '-'
 
 array_for_converting_numbers: db "0123456789ABCDEF"
 jump_table:
-            dq processInvalid ; a
-            dq processBinary  ; b
-            dq processChar    ; c
-            dq processDecimal ; d
-            dq processInvalid ; e
-            dq processInvalid ; f
-            dq processInvalid ; g
-            dq processInvalid ; h
-            dq processInvalid ; i
-            dq processInvalid ; j
-            dq processInvalid ; k
-            dq processInvalid ; l
-            dq processInvalid ; m
-            dq processInvalid ; n
-            dq processOct     ; o
-            dq processInvalid ; p
-            dq processInvalid ; q
-            dq processInvalid ; r
-            dq processString  ; s
-            dq processInvalid ; t
-            dq processInvalid ; u
-            dq processInvalid ; v
-            dq processInvalid ; w
-            dq processHex     ; x
-            dq processInvalid ; y
-            dq processInvalid ; z
+            dq processInvalid     ; a
+            dq processBinary      ; b
+            dq processChar        ; c
+            dq processDecimal     ; d
+            dq processInvalid     ; e
+            dq processInvalid     ; f
+            dq processInvalid     ; g
+            dq processInvalid     ; h
+            dq processInvalid     ; i
+            dq processInvalid     ; j
+            dq processInvalid     ; k
+            dq processInvalid     ; l
+            dq processLongDecimal ; m       // long decimal
+            dq processInvalid     ; n
+            dq processOct         ; o
+            dq processInvalid     ; p
+            dq processInvalid     ; q
+            dq processInvalid     ; r
+            dq processString      ; s
+            dq processInvalid     ; t
+            dq processInvalid     ; u
+            dq processInvalid     ; v
+            dq processInvalid     ; w
+            dq processHex         ; x
+            dq processInvalid     ; y
+            dq processInvalid     ; z
