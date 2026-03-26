@@ -1,6 +1,7 @@
 section .text
 
 global MyPrintf
+default rel
 
 %macro  PRINT_NUMBER 2
         push rdi
@@ -103,7 +104,7 @@ ProcessingStack:
 ;
 ; Exit:  rbp += 8, если всё хорошо
 ;        rax = -1  если произошла ошибка
-; Destr: rax, rcx
+; Destr: rax, rcx, rdx
 ; ----------------------------------------------------------------------------------------
 SpecialSymbolProc:
             cmp byte [rdi], 'a'
@@ -113,8 +114,10 @@ SpecialSymbolProc:
 
             xor rcx, rcx            ;!!!
             mov cl, [rdi]           ;берем ASCII код символа, лежащего по адресу [rdi]
-            mov rcx, [jump_table + 8*(rcx - 'a')]
-            jmp rcx
+            lea rdx, [jump_table]
+            mov rcx, [rdx + 8*(rcx-'a')]
+            add rdx, rcx
+            jmp rdx
 return_here_after_jmp_table:
             add rbp, 8
             ret
@@ -147,7 +150,7 @@ processChar:
 ;        rbp увеличивается на 8 (переход к следующему аргументу)
 ;        при ошибке возвращается -1 через processInvalid
 ;
-; Destr: rax, rcx, r10, r12 (через NumberToASCII и PrintChar)
+; Destr: rax, rcx, rdx, r10, r12 (через NumberToASCII и PrintChar)
 ; ----------------------------------------------------------------------------------------
 processLSpecifier:
             inc rdi
@@ -165,8 +168,10 @@ processLSpecifier:
 handle_ok:
             xor rcx, rcx            ;!!!
             mov cl, [rdi]           ;берем ASCII код символа, лежащего по адресу [rdi]
-            mov rcx, [mini_jump_table + 8*(rcx - 'a')]
-            jmp rcx
+            lea rdx, [mini_jump_table]
+            mov rcx, [rdx + 8*(rcx - 'a')]
+            add rdx, rcx
+            jmp rdx
 return_here_after_mini_jmp_table:
             pop rdi
             jmp return_here_after_jmp_table
@@ -271,7 +276,8 @@ PrintChar:
 .no_flush:
             inc r12
             mov al, [rdi]
-            mov byte [print_buffer + r10], al       ;нельзя 2 операнда в памяти, надо через регистр
+            lea r9, [print_buffer]
+            mov byte [r9 + r10], al       ;нельзя 2 операнда в памяти, надо через регистр
 
             inc r10
             pop rax
@@ -295,7 +301,7 @@ FlushBuffer:
 
             mov rax, syscall_of_write   ; syscall of "write"
             mov rdi, stdout_descr       ; файловый дескриптор stdout
-            mov rsi, print_buffer       ; адрес буфера
+            lea rsi, [print_buffer]       ; адрес буфера
             mov rdx, r10                ; количество символов для вывода
             syscall
 
@@ -349,6 +355,8 @@ NumberToASCII:
             push r8             ; используется для подсчёта количества разрядов
             push r9             ; используем для хранения сдвига в зависимости от основания СС, кратной двум
             push r11            ; используем для хранения маски  в зависимости от основания СС, кратной двум
+            push r13            ; используем для хранения базы таблицы
+            lea r13, [array_for_converting_numbers]
 
             jc .working_with_64
             mov eax, [rdi]      ; в eax число, которое нужно напечатать
@@ -364,12 +372,12 @@ NumberToASCII:
             jge .number_is_positive
 
 .number_is_negative:
-            mov rdi, minus_symbol
+            lea rdi, [minus_symbol]
             call PrintChar
             neg rax
 
 .number_is_positive:
-            mov rbx, num_buffer + num_buffer_size - 1   ;rbx-конец буфера
+            lea rbx, [num_buffer + num_buffer_size - 1]   ;rbx-конец буфера
 
             xor r8, r8;                     ; счётчик разрядов (не rcx, так как в rcx будет сдвиг)
             cmp rsi, 10                     ; //ДЕЛО СДЕЛАНО если СС кратна двум, то сдвиг вместо деления и побитовые операции
@@ -378,7 +386,7 @@ NumberToASCII:
             inc r8
             xor rdx, rdx                    ; div считает делимым большое 128-битное число [rdx][rax]
             div rsi
-            mov dl, [array_for_converting_numbers + rdx]
+            mov dl, [r13 + rdx]
             mov [rbx], dl
             dec rbx                         ; декрементируем, так как идем справа налево по буферу
             test rax, rax
@@ -404,7 +412,8 @@ NumberToASCII:
             inc r8
             mov rdx, rax
             and rdx, r11
-            mov dl, [array_for_converting_numbers + rdx]
+
+            mov dl, [r13 + rdx]
             mov [rbx], dl
             dec rbx
             mov rcx, r9
@@ -414,7 +423,7 @@ NumberToASCII:
 
 .output:
             mov rcx, r8                         ; теперь в rcx количество разрядов в числе
-            mov rsi, num_buffer + num_buffer_size
+            lea rsi, [num_buffer + num_buffer_size]
             sub rsi, rcx
 .printing_loop:
             test rcx, rcx
@@ -426,6 +435,7 @@ NumberToASCII:
             dec rcx
             jmp .printing_loop
 .done:
+            pop r13
             pop r11
             pop r9
             pop r8
@@ -462,57 +472,57 @@ minus_symbol:       db '-'
 
 array_for_converting_numbers: db "0123456789ABCDEF"
 jump_table:
-            dq processInvalid     ; a
-            dq processBinary      ; b
-            dq processChar        ; c
-            dq processDecimal     ; d
-            dq processInvalid     ; e
-            dq processInvalid     ; f
-            dq processInvalid     ; g
-            dq processInvalid     ; h
-            dq processInvalid     ; i
-            dq processInvalid     ; j
-            dq processInvalid     ; k
-            dq processLSpecifier  ; l
-            dq processInvalid     ; m
-            dq processInvalid     ; n
-            dq processOct         ; o
-            dq processInvalid     ; p
-            dq processInvalid     ; q
-            dq processInvalid     ; r
-            dq processString      ; s
-            dq processInvalid     ; t
-            dq processInvalid     ; u
-            dq processInvalid     ; v
-            dq processInvalid     ; w
-            dq processHex         ; x
-            dq processInvalid     ; y
-            dq processInvalid     ; z
+            dq processInvalid    - jump_table   ; a
+            dq processBinary     - jump_table  ; b
+            dq processChar       - jump_table  ; c
+            dq processDecimal    - jump_table  ; d
+            dq processInvalid    - jump_table  ; e
+            dq processInvalid    - jump_table  ; f
+            dq processInvalid    - jump_table  ; g
+            dq processInvalid    - jump_table  ; h
+            dq processInvalid    - jump_table  ; i
+            dq processInvalid    - jump_table  ; j
+            dq processInvalid    - jump_table  ; k
+            dq processLSpecifier - jump_table  ; l
+            dq processInvalid    - jump_table  ; m
+            dq processInvalid    - jump_table  ; n
+            dq processOct        - jump_table  ; o
+            dq processInvalid    - jump_table  ; p
+            dq processInvalid    - jump_table  ; q
+            dq processInvalid    - jump_table  ; r
+            dq processString     - jump_table  ; s
+            dq processInvalid    - jump_table  ; t
+            dq processInvalid    - jump_table  ; u
+            dq processInvalid    - jump_table  ; v
+            dq processInvalid    - jump_table  ; w
+            dq processHex        - jump_table  ; x
+            dq processInvalid    - jump_table  ; y
+            dq processInvalid    - jump_table  ; z
 
 mini_jump_table:
-            dq miniHandleInvalid  ; a
-            dq miniHandleBinary   ; b
-            dq miniHandleInvalid  ; c
-            dq miniHandleDecimal  ; d
-            dq miniHandleInvalid  ; e
-            dq miniHandleInvalid  ; f
-            dq miniHandleInvalid  ; g
-            dq miniHandleInvalid  ; h
-            dq miniHandleInvalid  ; i
-            dq miniHandleInvalid  ; j
-            dq miniHandleInvalid  ; k
-            dq miniHandleInvalid  ; l
-            dq miniHandleInvalid  ; m
-            dq miniHandleInvalid  ; n
-            dq miniHandleOct      ; o
-            dq miniHandleInvalid  ; p
-            dq miniHandleInvalid  ; q
-            dq miniHandleInvalid  ; r
-            dq miniHandleInvalid  ; s
-            dq miniHandleInvalid  ; t
-            dq miniHandleInvalid  ; u
-            dq miniHandleInvalid  ; v
-            dq miniHandleInvalid  ; w
-            dq miniHandleHex      ; x
-            dq miniHandleInvalid  ; y
-            dq miniHandleInvalid  ; z
+            dq miniHandleInvalid - mini_jump_table  ; a
+            dq miniHandleBinary  - mini_jump_table ; b
+            dq miniHandleInvalid - mini_jump_table ; c
+            dq miniHandleDecimal - mini_jump_table ; d
+            dq miniHandleInvalid - mini_jump_table ; e
+            dq miniHandleInvalid - mini_jump_table ; f
+            dq miniHandleInvalid - mini_jump_table ; g
+            dq miniHandleInvalid - mini_jump_table ; h
+            dq miniHandleInvalid - mini_jump_table ; i
+            dq miniHandleInvalid - mini_jump_table ; j
+            dq miniHandleInvalid - mini_jump_table ; k
+            dq miniHandleInvalid - mini_jump_table ; l
+            dq miniHandleInvalid - mini_jump_table ; m
+            dq miniHandleInvalid - mini_jump_table ; n
+            dq miniHandleOct     - mini_jump_table ; o
+            dq miniHandleInvalid - mini_jump_table ; p
+            dq miniHandleInvalid - mini_jump_table ; q
+            dq miniHandleInvalid - mini_jump_table ; r
+            dq miniHandleInvalid - mini_jump_table ; s
+            dq miniHandleInvalid - mini_jump_table ; t
+            dq miniHandleInvalid - mini_jump_table ; u
+            dq miniHandleInvalid - mini_jump_table ; v
+            dq miniHandleInvalid - mini_jump_table ; w
+            dq miniHandleHex     - mini_jump_table ; x
+            dq miniHandleInvalid - mini_jump_table ; y
+            dq miniHandleInvalid - mini_jump_table ; z
