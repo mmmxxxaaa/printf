@@ -1,5 +1,7 @@
 section .text
 
+extern printf
+
 global MyPrintf
 default rel
 
@@ -27,21 +29,27 @@ default rel
 ; Destr: rax, rdi, r10
 ; ----------------------------------------------------------------------------------------
 MyPrintf:
-            pop r10;            ; сохранили адрес возврата
+            pop r14            ; сохранили адрес возврата
             push r9
             push r8
             push rcx
             push rdx
             push rsi
+            push rdi
 
             call ProcessingStack
 
+            pop rdi
             pop rsi
             pop rdx
             pop rcx
             pop r8
             pop r9
-            push r10
+
+            xor rax, rax
+            call printf wrt ..plt
+
+            push r14
 
             ret
 
@@ -61,7 +69,7 @@ ProcessingStack:
             xor r12, r12
 
             mov rbp, rsp
-            add rbp, 32             ; в стеке до первого аргумента лежит еще [r12], [r10]; [старое значение rbp] и [адрес возврата]
+            add rbp, 40             ; в стеке до первого аргумента лежит еще [сохраненный rdi] [r12], [r10]; [старое значение rbp] и [адрес возврата]
 .printing_loop:
             cmp byte [rdi], 0       ; выводим символы, пока не встретим терминирующий нулевой байт
             je .exit_ok
@@ -363,6 +371,11 @@ NumberToASCII:
             jc .working_with_64
             mov eax, [rdi]      ; в eax число, которое нужно напечатать
                                 ; важно, что именно в eax, иначе он будет их воспринимать как большие положительные
+            cmp rsi, 10
+            je .signed_32
+            mov eax, eax        ; беззнаковое расширение eax до rax
+            jmp .check_sign
+.signed_32:
             cdqe                ; используем знаковое расширение eax до rax
             jmp .check_sign
 
@@ -374,6 +387,8 @@ NumberToASCII:
             jge .number_is_positive
 
 .number_is_negative:
+            cmp rsi, 10
+            jne .number_is_positive          ; если основание СС не 10, то минус не выводим
             lea rdi, [minus_symbol]
             call PrintChar
             neg rax

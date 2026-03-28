@@ -31,17 +31,8 @@ int main()
 
     MyPrintf("\n=== Проверка на обработку ошибок ===\n");
     int ret = 0;
-    ret = MyPrintf("Before error %q after error\n");                        //буфер не сбрасываю, поэтому строка не выводится
+    ret = MyPrintf("Before error %q after error\n");                        //буфер при ошибке не сбрасываю, поэтому строка не выводится
     MyPrintf("Возвращаемое значение MyPrintf c неверным спецификатором: %d\n", ret);
-    int res_off_ru = printf("Дед\n");
-    printf("Возвращаемое значение СТАНДАРТНОЙ функции при вызове c аргументом \"Дед\\n\" = %d\n", res_off_ru);
-    int res_my_ru = MyPrintf("Дед\n");
-    printf("Возвращаемое значение МОЕЙ функции при вызове c аргументом \"Дед\\n\" = %d\n", res_my_ru);
-
-    int res_off_eng = printf("Ded\n");
-    printf("Возвращаемое значение СТАНДАРТНОЙ функции при вызове c аргументом \"Ded\\n\" = %d\n", res_off_eng);
-    int res_my_eng = MyPrintf("Ded\n");
-    printf("Возвращаемое значение МОЕЙ функции при вызове c аргументом \"Ded\\n\" = %d\n", res_my_eng);
 
     MyPrintf("\n=== Проверка передачи аргументов ===\n");
     MyPrintf(" %d %c %s %x %o %b\n", 100, 'Z', "тест", 0xABC, 0777, 0b1010);
