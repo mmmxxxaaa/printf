@@ -107,15 +107,15 @@ ProcessingStack:
 ; Destr: rax, rcx, rdx
 ; ----------------------------------------------------------------------------------------
 SpecialSymbolProc:
-            cmp byte [rdi], 'a'
+            cmp byte [rdi], 'b'
             jb processInvalid
-            cmp byte [rdi], 'z'
+            cmp byte [rdi], 'x'
             ja processInvalid
 
             xor rcx, rcx            ;!!!
             mov cl, [rdi]           ;берем ASCII код символа, лежащего по адресу [rdi]
             lea rdx, [jump_table]
-            mov rcx, [rdx + 8*(rcx-'a')]
+            mov rcx, [rdx + 8*(rcx-'b')]
             add rdx, rcx
             jmp rdx
 return_here_after_jmp_table:
@@ -164,12 +164,12 @@ processLSpecifier:
             cmp byte [rdi], 'x'
             je handle_ok
             pop rdi
-            jmp processInvalid
+            jmp miniHandleInvalid
 handle_ok:
             xor rcx, rcx            ;!!!
             mov cl, [rdi]           ;берем ASCII код символа, лежащего по адресу [rdi]
             lea rdx, [mini_jump_table]
-            mov rcx, [rdx + 8*(rcx - 'a')]
+            mov rcx, [rdx + 8*(rcx - 'b')]
             add rdx, rcx
             jmp rdx
 return_here_after_mini_jmp_table:
@@ -269,6 +269,7 @@ processString:
 ; ----------------------------------------------------------------------------------------
 PrintChar:
             push rax
+            push r9
             cmp r10, print_buffer_size
             jb .no_flush
 
@@ -280,6 +281,7 @@ PrintChar:
             mov byte [r9 + r10], al       ;нельзя 2 операнда в памяти, надо через регистр
 
             inc r10
+            pop r9
             pop rax
             ret
 
@@ -472,57 +474,23 @@ minus_symbol:       db '-'
 
 array_for_converting_numbers: db "0123456789ABCDEF"
 jump_table:
-            dq processInvalid    - jump_table   ; a
             dq processBinary     - jump_table  ; b
             dq processChar       - jump_table  ; c
             dq processDecimal    - jump_table  ; d
-            dq processInvalid    - jump_table  ; e
-            dq processInvalid    - jump_table  ; f
-            dq processInvalid    - jump_table  ; g
-            dq processInvalid    - jump_table  ; h
-            dq processInvalid    - jump_table  ; i
-            dq processInvalid    - jump_table  ; j
-            dq processInvalid    - jump_table  ; k
+            times ('k' - 'e' + 1)   dq processInvalid - jump_table
             dq processLSpecifier - jump_table  ; l
-            dq processInvalid    - jump_table  ; m
-            dq processInvalid    - jump_table  ; n
+            times ('n' - 'm' + 1)   dq processInvalid - jump_table
             dq processOct        - jump_table  ; o
-            dq processInvalid    - jump_table  ; p
-            dq processInvalid    - jump_table  ; q
-            dq processInvalid    - jump_table  ; r
+            times ('r' - 'p' + 1)   dq processInvalid - jump_table
             dq processString     - jump_table  ; s
-            dq processInvalid    - jump_table  ; t
-            dq processInvalid    - jump_table  ; u
-            dq processInvalid    - jump_table  ; v
-            dq processInvalid    - jump_table  ; w
+            times ('w' - 't' + 1)   dq processInvalid - jump_table
             dq processHex        - jump_table  ; x
-            dq processInvalid    - jump_table  ; y
-            dq processInvalid    - jump_table  ; z
 
 mini_jump_table:
-            dq miniHandleInvalid - mini_jump_table  ; a
             dq miniHandleBinary  - mini_jump_table ; b
             dq miniHandleInvalid - mini_jump_table ; c
             dq miniHandleDecimal - mini_jump_table ; d
-            dq miniHandleInvalid - mini_jump_table ; e
-            dq miniHandleInvalid - mini_jump_table ; f
-            dq miniHandleInvalid - mini_jump_table ; g
-            dq miniHandleInvalid - mini_jump_table ; h
-            dq miniHandleInvalid - mini_jump_table ; i
-            dq miniHandleInvalid - mini_jump_table ; j
-            dq miniHandleInvalid - mini_jump_table ; k
-            dq miniHandleInvalid - mini_jump_table ; l
-            dq miniHandleInvalid - mini_jump_table ; m
-            dq miniHandleInvalid - mini_jump_table ; n
+            times ('n' - 'e' + 1) dq miniHandleInvalid - mini_jump_table
             dq miniHandleOct     - mini_jump_table ; o
-            dq miniHandleInvalid - mini_jump_table ; p
-            dq miniHandleInvalid - mini_jump_table ; q
-            dq miniHandleInvalid - mini_jump_table ; r
-            dq miniHandleInvalid - mini_jump_table ; s
-            dq miniHandleInvalid - mini_jump_table ; t
-            dq miniHandleInvalid - mini_jump_table ; u
-            dq miniHandleInvalid - mini_jump_table ; v
-            dq miniHandleInvalid - mini_jump_table ; w
+            times ('w' - 'p' + 1) dq miniHandleInvalid - mini_jump_table
             dq miniHandleHex     - mini_jump_table ; x
-            dq miniHandleInvalid - mini_jump_table ; y
-            dq miniHandleInvalid - mini_jump_table ; z
