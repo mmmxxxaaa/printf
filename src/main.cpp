@@ -27,7 +27,7 @@ int main()
     MyPrintf("%b, %b\n", -1, -2);
 
     MyPrintf("\n=== Ноль ===\n");
-    MyPrintf("%d %o %x %b %m \n", 0, 0, 0, 0, 0);
+    MyPrintf("%d %o %x %b \n", 0, 0, 0, 0);
 
     MyPrintf("\n=== Проверка на обработку ошибок ===\n");
     int ret = 0;

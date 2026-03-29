@@ -29,22 +29,24 @@ default rel
 ; Destr: rax, rdi, r10
 ; ----------------------------------------------------------------------------------------
 MyPrintf:
-            pop r14            ; сохранили адрес возврата
-            push r9
-            push r8
-            push rcx
-            push rdx
-            push rsi
-            push rdi
+                        ;rsp = ...F8 (был положен адрес возврата)
+            pop r14     ;rsp - ...00 (сохранили адрес возврата из стека)
+            push r9     ;rsp = ...F8
+            push r8     ;rsp = ...F0
+            push rcx    ;rsp = ...E8
+            push rdx    ;rsp = ...E0
+            push rsi    ;rsp = ...D8
+            push rdi    ;rsp = ...D0
 
             call ProcessingStack
 
-            pop rdi
-            pop rsi
-            pop rdx
-            pop rcx
-            pop r8
-            pop r9
+            pop rdi     ;rsp = ...D8
+            pop rsi     ;rsp = ...E0
+            pop rdx     ;rsp = ...E8
+            pop rcx     ;rsp = ...F0
+            pop r8      ;rsp = ...F8
+            pop r9      ;rsp - ...00 (ПОСЛЕ ПОСЛЕДНЕГО ПУША ВЕРНУЛИСЬ В ИСХОДНОЕ СОСТОЯНИЕ СТЕКА)
+                        ;оно кратно 16 => выравнивать не нужно
 
             xor rax, rax
             call printf wrt ..plt
@@ -115,13 +117,14 @@ ProcessingStack:
 ; Destr: rax, rcx, rdx
 ; ----------------------------------------------------------------------------------------
 SpecialSymbolProc:
-            cmp byte [rdi], 'b'
-            jb processInvalid
-            cmp byte [rdi], 'x'
-            ja processInvalid
-
             xor rcx, rcx            ;!!!
             mov cl, [rdi]           ;берем ASCII код символа, лежащего по адресу [rdi]
+
+            cmp cl, 'b'
+            jb processInvalid
+            cmp cl, 'x'
+            ja processInvalid
+
             lea rdx, [jump_table]
             mov rcx, [rdx + 8*(rcx-'b')]
             add rdx, rcx
@@ -162,26 +165,22 @@ processChar:
 ; ----------------------------------------------------------------------------------------
 processLSpecifier:
             inc rdi
-            push rdi                ; сохраняем после увеличения на 1
-            cmp byte [rdi], 'd'
-            je handle_ok
-            cmp byte [rdi], 'b'
-            je handle_ok
-            cmp byte [rdi], 'o'
-            je handle_ok
-            cmp byte [rdi], 'x'
-            je handle_ok
-            pop rdi
-            jmp miniHandleInvalid
-handle_ok:
+            ;push rdi                ; сохраняем после увеличения на 1
+
             xor rcx, rcx            ;!!!
             mov cl, [rdi]           ;берем ASCII код символа, лежащего по адресу [rdi]
+
+            cmp cl, 'b'
+            jb miniHandleInvalid
+            cmp cl, 'x'
+            ja miniHandleInvalid
+
             lea rdx, [mini_jump_table]
             mov rcx, [rdx + 8*(rcx - 'b')]
             add rdx, rcx
             jmp rdx
 return_here_after_mini_jmp_table:
-            pop rdi
+            ;pop rdi
             jmp return_here_after_jmp_table
 
 miniHandleBinary:
@@ -201,6 +200,7 @@ miniHandleHex:
             jmp return_here_after_mini_jmp_table
 
 miniHandleInvalid:
+            ;pop rdi
             jmp processInvalid
 
 ; ----------------------------------------------------------------------------------------
@@ -302,18 +302,23 @@ PrintChar:
 ; Destr: ...
 ; ----------------------------------------------------------------------------------------
 FlushBuffer:
-            push rdi                    ; сохрянем регистры, которые испортим при syscall
+            push rbp
+            mov rbp, rsp
+
+            and rsp, -16                ; делаем жёсткое выравнивание стека
+
+            push rdi
             push rsi
             push rdx
             push rax
-            push rcx                    ; //ЭТО ИМЕННО РЕСПЕКТ syscall всегда ломает rcx и r11
-            push r11
+            push rcx
+            push r11                    ; 6 * 8 = 48 - кратно 16, выравнивание сохраняется
 
             mov rax, syscall_of_write   ; syscall of "write"
             mov rdi, stdout_descr       ; файловый дескриптор stdout
-            lea rsi, [print_buffer]       ; адрес буфера
+            lea rsi, [print_buffer]     ; адрес буфера
             mov rdx, r10                ; количество символов для вывода
-            syscall
+            syscall                     ; //ЭТО ИМЕННО РЕСПЕКТ syscall всегда ломает rcx и r11
 
             xor r10, r10
 
@@ -324,6 +329,8 @@ FlushBuffer:
             pop rsi
             pop rdi
 
+            mov rbp, rsp
+            pop rbp
             ret
 ; ----------------------------------------------------------------------------------------
 ; Выводит строку, переданную в качестве аргумента к спецификатору %s
