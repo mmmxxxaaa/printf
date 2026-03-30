@@ -126,9 +126,10 @@ SpecialSymbolProc:
             ja processInvalid
 
             lea rdx, [jump_table]
-            mov rcx, [rdx + 8*(rcx-'b')]
-            add rdx, rcx
-            jmp rdx
+            jmp [rdx + 8*(rcx-'b')]
+            ;mov rcx, [rdx + 8*(rcx-'b')]
+            ;add rdx, rcx
+            ;jmp rdx
 return_here_after_jmp_table:
             add rbp, 8
             ret
@@ -175,9 +176,10 @@ processLSpecifier:
             ja miniHandleInvalid
 
             lea rdx, [mini_jump_table]
-            mov rcx, [rdx + 8*(rcx - 'b')]
-            add rdx, rcx
-            jmp rdx
+            jmp [rdx + 8*(rcx - 'b')]
+            ;mov rcx, [rdx + 8*(rcx - 'b')]
+            ;add rdx, rcx
+            ;jmp rdx
 return_here_after_mini_jmp_table:
             jmp return_here_after_jmp_table
 
@@ -387,7 +389,7 @@ NumberToASCII:
 
 .number_is_negative:
             cmp rsi, 10
-            jne .number_is_positive          ; если основание СС не 10, то минус не выводим
+            jne .number_is_positive         ; если основание СС не 10, то минус не выводим
             lea rdi, [minus_symbol]
             call PrintChar
             neg rax
@@ -488,23 +490,23 @@ minus_symbol:       db '-'
 
 array_for_converting_numbers: db "0123456789ABCDEF"
 jump_table:
-            dq processBinary     - jump_table  ; b
-            dq processChar       - jump_table  ; c
-            dq processDecimal    - jump_table  ; d
-            times ('k' - 'e' + 1)   dq processInvalid - jump_table
-            dq processLSpecifier - jump_table  ; l
-            times ('n' - 'm' + 1)   dq processInvalid - jump_table
-            dq processOct        - jump_table  ; o
-            times ('r' - 'p' + 1)   dq processInvalid - jump_table
-            dq processString     - jump_table  ; s
-            times ('w' - 't' + 1)   dq processInvalid - jump_table
-            dq processHex        - jump_table  ; x
+            dq processBinary        ; b
+            dq processChar          ; c
+            dq processDecimal       ; d
+            times ('k' - 'e' + 1)   dq processInvalid
+            dq processLSpecifier    ; l
+            times ('n' - 'm' + 1)   dq processInvalid
+            dq processOct           ; o
+            times ('r' - 'p' + 1)   dq processInvalid
+            dq processString        ; s
+            times ('w' - 't' + 1)   dq processInvalid
+            dq processHex           ; x
 
 mini_jump_table:
-            dq miniHandleBinary  - mini_jump_table ; b
-            dq miniHandleInvalid - mini_jump_table ; c
-            dq miniHandleDecimal - mini_jump_table ; d
-            times ('n' - 'e' + 1) dq miniHandleInvalid - mini_jump_table
-            dq miniHandleOct     - mini_jump_table ; o
-            times ('w' - 'p' + 1) dq miniHandleInvalid - mini_jump_table
-            dq miniHandleHex     - mini_jump_table ; x
+            dq miniHandleBinary   ; b
+            dq miniHandleInvalid  ; c
+            dq miniHandleDecimal  ; d
+            times ('n' - 'e' + 1) dq miniHandleInvalid
+            dq miniHandleOct      ; o
+            times ('w' - 'p' + 1) dq miniHandleInvalid
+            dq miniHandleHex      ; x

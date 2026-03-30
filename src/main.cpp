@@ -65,7 +65,7 @@ int main()
 
     MyPrintf("\n=== Ещё тесты на числа ===\n");
     MyPrintf("Result: %d + %d = %d\n", 5, 3, 5+3);
-    MyPrintf("Char: %c, Hex: %x, Oct: %o, Bin: %b\n", 'X', 255, 255, 255);
+    MyPrintf("Char: %c, Hex: %x, Oct: %o, Bin: %b\n\n%d %s %x %d%%%c%b\n", 'X', 255, 255, 255, -1, "love", 3802, 100, 33, 126);
 
     return 0;
 }
