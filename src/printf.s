@@ -195,7 +195,7 @@ miniHandleBinary:
             jmp return_here_after_mini_jmp_table
 
 miniHandleDecimal:
-            PRINT_NUMBER stc
+            PRINT_DECIMAL_NUMBER stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleOct:
@@ -458,7 +458,7 @@ NumberToASCII_ForDecimal:
             neg rax
 .number_is_positive:
             lea rbx, [num_buffer + num_buffer_size - 1]   ;rbx-конец буфера
-            xor r8, r8;                     ; счётчик разрядов (не rcx, так как в rcx будет сдвиг)
+            xor r8, r8                      ; счётчик разрядов (не rcx, так как в rcx будет сдвиг)
 .ten_loop:
             inc r8
             xor rdx, rdx                    ; div считает делимым большое 128-битное число [rdx][rax]
@@ -470,6 +470,7 @@ NumberToASCII_ForDecimal:
             jnz .ten_loop                   ; продолжаем до тех пор, пока не получим ноль
 
             mov rcx, r8                     ; теперь в rcx количество разрядов в числе
+            xor rsi, rsi
             lea rsi, [num_buffer + num_buffer_size]
             sub rsi, rcx
 .printing_loop:
