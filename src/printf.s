@@ -5,14 +5,22 @@ extern printf
 global MyPrintf
 default rel
 
-%macro  PRINT_NUMBER 4
+%macro  PRINT_DECIMAL_NUMBER 1
+        push rdi
+        mov rdi, rbp
+        %1                      ; stc, если 64-битное число; clc, если 32-битное число
+        call NumberToASCII_ForDecimal
+        pop rdi
+%endmacro
+
+%macro  PRINT_NOT_DECIMAL_NUMBER 4
         push rdi
         mov rdi, rbp
         mov rsi, %1             ; передаем основание СС
         mov ch,  %2             ; передаем маску
         mov cl,  %3             ; передаем сдвиг
         %4                      ; stc, если 64-битное число; clc, если 32-битное число
-        call NumberToASCII
+        call NumberToASCII_NotForDecimal
         pop rdi
 %endmacro
 
@@ -179,26 +187,23 @@ processLSpecifier:
 
             lea rdx, [mini_jump_table]
             jmp [rdx + 8*(rcx - 'b')]
-            ;mov rcx, [rdx + 8*(rcx - 'b')]
-            ;add rdx, rcx
-            ;jmp rdx
 return_here_after_mini_jmp_table:
             jmp return_here_after_jmp_table
 
 miniHandleBinary:
-            PRINT_NUMBER 2, mask_for_binary, shift_for_binary, stc
+            PRINT_NOT_DECIMAL_NUMBER 2, mask_for_binary, shift_for_binary, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleDecimal:
-            PRINT_NUMBER 10, 0, 0, stc
+            PRINT_NUMBER stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleOct:
-            PRINT_NUMBER 8, mask_for_oct, shift_for_oct, stc
+            PRINT_NOT_DECIMAL_NUMBER 8, mask_for_oct, shift_for_oct, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleHex:
-            PRINT_NUMBER 16, mask_for_hex, shift_for_hex, stc
+            PRINT_NOT_DECIMAL_NUMBER 16, mask_for_hex, shift_for_hex, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleInvalid:
@@ -212,7 +217,7 @@ miniHandleInvalid:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processBinary:
-            PRINT_NUMBER 2, mask_for_binary, shift_for_binary, clc
+            PRINT_NOT_DECIMAL_NUMBER 2, mask_for_binary, shift_for_binary, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -223,7 +228,7 @@ processBinary:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processDecimal:
-            PRINT_NUMBER 10, 0, 0, clc
+            PRINT_DECIMAL_NUMBER clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -234,7 +239,7 @@ processDecimal:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processOct:
-            PRINT_NUMBER 8, mask_for_oct, shift_for_oct, clc
+            PRINT_NOT_DECIMAL_NUMBER 8, mask_for_oct, shift_for_oct, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -245,7 +250,7 @@ processOct:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processHex:
-            PRINT_NUMBER 16, mask_for_hex, shift_for_hex, clc
+            PRINT_NOT_DECIMAL_NUMBER 16, mask_for_hex, shift_for_hex, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -361,7 +366,7 @@ PrintString:
 ; Exit:  r10, r12 увеличиваются на количество выведенных цифр (плюс знак, если отрицательное)
 ; Destr: rsi
 ; ----------------------------------------------------------------------------------------
-NumberToASCII:
+NumberToASCII_NotForDecimal:
             push rax            ; используется для хранения значения числа
             push rbx            ; используется для адресации к буферу
             push rcx            ; cl используется для сдвига, rcx в конце используется для syscall
@@ -376,46 +381,15 @@ NumberToASCII:
             jc .working_with_64
             mov eax, [rdi]      ; в eax число, которое нужно напечатать
                                 ; важно, что именно в eax, иначе он будет их воспринимать как большие положительные
-            cmp rsi, 10
-            je .signed_32
-            mov eax, eax        ; беззнаковое расширение eax до rax
-            jmp .check_sign
-.signed_32:
-            cdqe                ; используем знаковое расширение eax до rax
-            jmp .check_sign
-
+            mov eax, eax        ; %o %b %x беззнаковые типы => используем беззнаковое расширение eax до rax
+            jmp .powers_of_two_base_process
 .working_with_64:
             mov rax, [rdi]
 
-.check_sign:
-            cmp rax, 0
-            jge .number_is_positive
-
-.number_is_negative:
-            cmp rsi, 10
-            jne .number_is_positive         ; если основание СС не 10, то минус не выводим
-            lea rdi, [minus_symbol]
-            call PrintChar
-            neg rax
-
-.number_is_positive:
-            lea rbx, [num_buffer + num_buffer_size - 1]   ;rbx-конец буфера
-
-            xor r8, r8;                     ; счётчик разрядов (не rcx, так как в rcx будет сдвиг)
-            cmp rsi, 10                     ; //ДЕЛО СДЕЛАНО если СС кратна двум, то сдвиг вместо деления и побитовые операции
-            jne .powers_of_two_base_process
-.ten_base_loop:
-            inc r8
-            xor rdx, rdx                    ; div считает делимым большое 128-битное число [rdx][rax]
-            div rsi
-            mov dl, [r13 + rdx]
-            mov [rbx], dl
-            dec rbx                         ; декрементируем, так как идем справа налево по буферу
-            test rax, rax
-            jnz .ten_base_loop              ; продолжаем до тех пор, пока не получим ноль
-            jmp .output
-
 .powers_of_two_base_process:
+            lea rbx, [num_buffer + num_buffer_size - 1]   ;rbx-конец буфера
+            xor r8, r8;                     ; счётчик разрядов (не rcx, так как в rcx будет сдвиг)
+
             push rbx
             xor rbx, rbx
             mov bl, ch
@@ -426,7 +400,6 @@ NumberToASCII:
             inc r8
             mov rdx, rax
             and rdx, r11
-
             mov dl, [r13 + rdx]
             mov [rbx], dl
             dec rbx
@@ -434,7 +407,6 @@ NumberToASCII:
             test rax, rax
             jnz .powers_of_two_base_loop
 
-.output:
             mov rcx, r8                         ; теперь в rcx количество разрядов в числе
             lea rsi, [num_buffer + num_buffer_size]
             sub rsi, rcx
@@ -455,6 +427,66 @@ NumberToASCII:
             pop rdi
             pop rdx
             pop rcx
+            pop rbx
+            pop rax
+
+            ret
+
+NumberToASCII_ForDecimal:
+            push rax            ; используется для хранения значения числа
+            push rbx            ; используется для адресации к буферу
+            push rdx            ; занулим его перед делением (то есть испортим)
+            push rdi            ; испортим его минусом/испортим при syscall
+            push rsi
+            push r8             ; используется для подсчёта количества разрядов
+            push r13            ; используем для хранения базы таблицы
+            mov rsi, 10
+            lea r13, [array_for_converting_numbers]
+
+            jc .working_with_64
+            mov eax, [rdi]      ; в eax число, которое нужно напечатать
+            cdqe                ; используем знаковое расширение eax до rax
+            jmp .check_sign
+.working_with_64:
+            mov rax, [rdi]
+.check_sign:
+            cmp rax, 0
+            jge .number_is_positive
+.number_is_negative:
+            lea rdi, [minus_symbol]
+            call PrintChar
+            neg rax
+.number_is_positive:
+            lea rbx, [num_buffer + num_buffer_size - 1]   ;rbx-конец буфера
+            xor r8, r8;                     ; счётчик разрядов (не rcx, так как в rcx будет сдвиг)
+.ten_loop:
+            inc r8
+            xor rdx, rdx                    ; div считает делимым большое 128-битное число [rdx][rax]
+            div rsi
+            mov dl, [r13 + rdx]
+            mov [rbx], dl
+            dec rbx                         ; декрементируем, так как идем справа налево по буферу
+            test rax, rax
+            jnz .ten_loop                   ; продолжаем до тех пор, пока не получим ноль
+
+            mov rcx, r8                     ; теперь в rcx количество разрядов в числе
+            lea rsi, [num_buffer + num_buffer_size]
+            sub rsi, rcx
+.printing_loop:
+            test rcx, rcx
+            jz .done
+
+            mov rdi, rsi
+            call PrintChar
+            inc rsi
+            dec rcx
+            jmp .printing_loop
+.done:
+            pop r13
+            pop r8
+            pop rsi
+            pop rdi
+            pop rdx
             pop rbx
             pop rax
 
