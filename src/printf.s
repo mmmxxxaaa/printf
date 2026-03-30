@@ -25,7 +25,7 @@ default rel
 ;        r8    = 4 аргумент       (формально пятый     аргумент функции)
 ;        r9    = 5 аргумент       (формально шестой    аргумент функции)
 ;        stack = 6 и последующие аргументы
-; Exit:  rax   = количество выведенных символов (или -1 при ошибке)
+; Exit:  rax   = количество выведенных символов стандартным printf (если убрать его, то будет -1 при ошибке)
 ; Destr: rax, rdi, r10
 ; ----------------------------------------------------------------------------------------
 MyPrintf:
@@ -165,7 +165,6 @@ processChar:
 ; ----------------------------------------------------------------------------------------
 processLSpecifier:
             inc rdi
-            ;push rdi                ; сохраняем после увеличения на 1
 
             xor rcx, rcx            ;!!!
             mov cl, [rdi]           ;берем ASCII код символа, лежащего по адресу [rdi]
@@ -180,7 +179,6 @@ processLSpecifier:
             add rdx, rcx
             jmp rdx
 return_here_after_mini_jmp_table:
-            ;pop rdi
             jmp return_here_after_jmp_table
 
 miniHandleBinary:
@@ -200,7 +198,6 @@ miniHandleHex:
             jmp return_here_after_mini_jmp_table
 
 miniHandleInvalid:
-            ;pop rdi
             jmp processInvalid
 
 ; ----------------------------------------------------------------------------------------
@@ -233,12 +230,7 @@ processDecimal:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processOct:
-            push rdi
-            mov rdi, rbp
-            mov rsi, 8
-            clc
-            call NumberToASCII
-            pop rdi
+            PRINT_NUMBER 8, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -329,7 +321,7 @@ FlushBuffer:
             pop rsi
             pop rdi
 
-            mov rbp, rsp
+            mov rsp, rbp
             pop rbp
             ret
 ; ----------------------------------------------------------------------------------------
