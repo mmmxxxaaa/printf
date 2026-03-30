@@ -5,11 +5,13 @@ extern printf
 global MyPrintf
 default rel
 
-%macro  PRINT_NUMBER 2
+%macro  PRINT_NUMBER 4
         push rdi
         mov rdi, rbp
-        mov rsi, %1
-        %2
+        mov rsi, %1             ; передаем основание СС
+        mov ch,  %2             ; передаем маску
+        mov cl,  %3             ; передаем сдвиг
+        %4                      ; stc, если 64-битное число; clc, если 32-битное число
         call NumberToASCII
         pop rdi
 %endmacro
@@ -184,19 +186,19 @@ return_here_after_mini_jmp_table:
             jmp return_here_after_jmp_table
 
 miniHandleBinary:
-            PRINT_NUMBER 2, stc
+            PRINT_NUMBER 2, mask_for_binary, shift_for_binary, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleDecimal:
-            PRINT_NUMBER 10, stc
+            PRINT_NUMBER 10, 0, 0, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleOct:
-            PRINT_NUMBER 8, stc
+            PRINT_NUMBER 8, mask_for_oct, shift_for_oct, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleHex:
-            PRINT_NUMBER 16, stc
+            PRINT_NUMBER 16, mask_for_hex, shift_for_hex, stc
             jmp return_here_after_mini_jmp_table
 
 miniHandleInvalid:
@@ -210,7 +212,7 @@ miniHandleInvalid:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processBinary:
-            PRINT_NUMBER 2, clc
+            PRINT_NUMBER 2, mask_for_binary, shift_for_binary, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -221,7 +223,7 @@ processBinary:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processDecimal:
-            PRINT_NUMBER 10, clc
+            PRINT_NUMBER 10, 0, 0, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -232,7 +234,7 @@ processDecimal:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processOct:
-            PRINT_NUMBER 8, clc
+            PRINT_NUMBER 8, mask_for_oct, shift_for_oct, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -243,7 +245,7 @@ processOct:
 ; Destr: rsi, r10, r12
 ; ----------------------------------------------------------------------------------------
 processHex:
-            PRINT_NUMBER 16, clc
+            PRINT_NUMBER 16, mask_for_hex, shift_for_hex, clc
             jmp return_here_after_jmp_table
 
 ; ----------------------------------------------------------------------------------------
@@ -352,6 +354,8 @@ PrintString:
 ; Переводит число в набор ASCII кодов для вывода в консоль
 ; Entry: rdi = адрес, по которому лежит начало числа
 ;        rsi = основание системы счисления
+;        ch  = маска            (для СС, кратных двум)
+;        cl  = битовый сдвиг    (для СС, кратных двум)
 ;        CF  = 0 работаем с 32-битным числом
 ;        CF  = 1 работаем с 64-битным числом
 ; Exit:  r10, r12 увеличиваются на количество выведенных цифр (плюс знак, если отрицательное)
@@ -412,20 +416,12 @@ NumberToASCII:
             jmp .output
 
 .powers_of_two_base_process:
-            cmp rsi, 2
-            jne .check_for_oct
-            mov r9, shift_for_binary
-            mov r11, mask_for_binary
-            jmp .powers_of_two_base_loop
-.check_for_oct:
-            cmp rsi, 8
-            jne .check_for_hex
-            mov r9, shift_for_oct
-            mov r11, mask_for_oct
-            jmp .powers_of_two_base_loop
-.check_for_hex:
-            mov r9, shift_for_hex
-            mov r11, mask_for_hex
+            push rbx
+            xor rbx, rbx
+            mov bl, ch
+            xor r11, r11
+            mov r11, rbx
+            pop rbx
 .powers_of_two_base_loop:
             inc r8
             mov rdx, rax
@@ -434,7 +430,6 @@ NumberToASCII:
             mov dl, [r13 + rdx]
             mov [rbx], dl
             dec rbx
-            mov rcx, r9
             shr rax, cl                         ; в качестве второго операнда можно использовать только cl/константу
             test rax, rax
             jnz .powers_of_two_base_loop
